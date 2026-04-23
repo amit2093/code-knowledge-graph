@@ -379,21 +379,28 @@
     function pickLayout(nodeCount) {
         if (nodeCount > LARGE_GRAPH) {
             // Grid: instant O(n), still readable
-            return { name: 'grid', animate: false, padding: 60, fit: true };
+            return { name: 'grid', animate: true, padding: 100, fit: true };
         }
         if (nodeCount > MEDIUM_GRAPH) {
             // Breadthfirst: O(n log n), fast and hierarchical
-            return { name: 'breadthfirst', animate: true, padding: 60, fit: true, spacingFactor: 1.4 };
+            return { name: 'breadthfirst', animate: true, padding: 100, fit: true, spacingFactor: 1.4 };
         }
-        // Full physics for small graphs
+
         return {
-            name: 'cose', animate: true, padding: 80, fit: true,
-            nodeRepulsion: () => 9000,
-            idealEdgeLength: () => 90,
-            edgeElasticity: () => 100,
-            gravity: 1, numIter: 1200
+            name: 'cose',
+            animate: true,
+            padding: 100,
+            fit: true,
+            nodeRepulsion: () => 10000, // to heavily repel nodes
+            idealEdgeLength: () => 100, // to lengthen connections
+            edgeElasticity: () => 0.8, // to make edges stretchier
+            componentSpacing: 100, // Forces space between disconnected sub-graphs
+            nodeOverlap: 200, // Prevents nodes from sitting on top of each other
+            gravity: 0.5,
+            numIter: 500
         };
     }
+
 
     /* ═══════════════════════════════════════════════
        BATCH LOADING — add nodes in chunks so the

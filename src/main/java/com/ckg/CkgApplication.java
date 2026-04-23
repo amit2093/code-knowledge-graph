@@ -21,6 +21,7 @@ public class CkgApplication {
         return args -> {
             ingestionService.ingestProject(targetPath);
             System.out.println(">>> IN-MEMORY GRAPH POPULATED: " + targetPath);
+            System.out.println(">>> OPEN http://localhost:8080/");
         };
     }
 }
