@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>CKG | Intelligence Engine</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #06080f;
+            --s1: #0a0e1a;
+            --s2: #0d1525;
+            --s3: #111d30;
+            --border: rgba(148,163,184,0.08);
+            --border-hi: rgba(148,163,184,0.16);
+
+            --cyan:  #38bdf8;
+            --cyan2: rgba(56,189,248,0.1);
+            --cyan3: rgba(56,189,248,0.25);
+            --amber: #fbbf24;
+            --green: #4ade80;
+            --red:   #f87171;
+
+            --t1: #e2eaf7;
+            --t2: #8ba5c8;
+            --t3: #3d5270;
+
+            --ff-display: 'Syne', sans-serif;
+            --ff-mono: 'Space Mono', monospace;
+            --sidebar-w: 400px;
+            --panel-w: 400px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+        body { font-family: var(--ff-mono); background: var(--bg); color: var(--t1); height: 100vh; display: flex; overflow: hidden; }
+
+        /* SIDEBAR */
+        #sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--s1); border-right: 1px solid var(--border-hi); display: flex; flex-direction: column; z-index: 20; position: relative; }
+        #sidebar::after { content:''; position:absolute; top:0; left:0; right:0; height:2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+
+        .sh { padding:24px 24px 18px; border-bottom:1px solid var(--border); }
+        .sh-eyebrow { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--t3); margin-bottom:10px; }
+        .sh-brand { font-family:var(--ff-display); font-size:24px; font-weight:800; letter-spacing:-.04em; }
+        .sh-brand em { color:var(--cyan); font-style:normal; text-shadow:0 0 24px rgba(56,189,248,.4); }
+        .sh-meta { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+
+        .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+        .pill-green { background:rgba(74,222,128,.08); border:1px solid rgba(74,222,128,.18); color:var(--green); }
+        .pill-cyan  { background:var(--cyan2); border:1px solid var(--cyan3); color:var(--cyan); }
+        .pdot { width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; animation:blink 2s ease-in-out infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+        .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); border-bottom:1px solid var(--border); }
+        .stat { background:var(--s1); padding:10px 0; text-align:center; }
+        .stat-n { font-family:var(--ff-display); font-size:20px; font-weight:700; color:var(--cyan); text-shadow:0 0 20px rgba(56,189,248,.3); }
+        .stat-l { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--t3); margin-top:2px; }
+
+        #chat-output { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:12px; scroll-behavior:smooth; }
+        #chat-output::-webkit-scrollbar { width:3px; }
+        #chat-output::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:2px; }
+
+        .msg { font-size:13px; line-height:1.7; border-radius:6px; padding:12px 14px; max-width:96%; animation:pop .2s ease; }
+        @keyframes pop { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+        .user-msg { align-self:flex-end; background:linear-gradient(135deg,rgba(56,189,248,.15),rgba(56,189,248,.07)); border:1px solid rgba(56,189,248,.22); }
+        .user-msg::before { content:'YOU'; display:block; font-size:9px; letter-spacing:.15em; color:var(--cyan); margin-bottom:5px; opacity:.6; }
+        .ai-msg { align-self:flex-start; background:var(--s2); border:1px solid var(--border-hi); }
+        .ai-msg::before { content:'CKG'; display:block; font-size:9px; letter-spacing:.15em; color:var(--amber); margin-bottom:5px; opacity:.6; }
+        .ai-msg p{margin:0 0 8px;} .ai-msg p:last-child{margin:0;} .ai-msg ul,.ai-msg ol{padding-left:16px;margin-bottom:8px;} .ai-msg li{margin-bottom:4px;} .ai-msg strong{color:var(--cyan);}
+        .ai-msg code{font-family:var(--ff-mono);background:rgba(0,0,0,.5);border:1px solid var(--border-hi);padding:1px 6px;border-radius:3px;font-size:11px;color:var(--amber);}
+        .ai-msg pre{background:rgba(0,0,0,.6);border:1px solid var(--border-hi);border-radius:5px;padding:12px;overflow-x:auto;margin:8px 0;}
+        .ai-msg pre code{background:none;border:none;padding:0;}
+        .dots{display:flex;gap:5px;align-items:center;height:20px;}
+        .dots span{width:5px;height:5px;background:var(--cyan);border-radius:50%;animation:db 1.2s ease-in-out infinite;opacity:.5;}
+        .dots span:nth-child(2){animation-delay:.2s;} .dots span:nth-child(3){animation-delay:.4s;}
+        @keyframes db{0%,80%,100%{transform:translateY(0);opacity:.3}40%{transform:translateY(-5px);opacity:1}}
+
+        .input-area{padding:14px 18px 18px;border-top:1px solid var(--border);}
+        .input-wrap{display:flex;align-items:center;background:var(--s2);border:1px solid var(--border-hi);border-radius:6px;overflow:hidden;transition:border-color .2s,box-shadow .2s;}
+        .input-wrap:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan2);}
+        .input-pre{color:var(--cyan);padding:0 10px;font-size:13px;opacity:.45;user-select:none;}
+        input[type=text]{flex:1;background:none;border:none;color:var(--t1);padding:12px 0;font-family:var(--ff-mono);font-size:13px;outline:none;caret-color:var(--cyan);}
+        input::placeholder{color:var(--t3);}
+        .send-btn{background:var(--cyan2);border:none;border-left:1px solid var(--border-hi);color:var(--cyan);width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+        .send-btn:hover{background:var(--cyan3);}
+        .send-btn svg{width:14px;height:14px;}
+        .input-hint{font-size:10px;color:var(--t3);margin-top:7px;letter-spacing:.04em;}
+
+        /* GRAPH MAIN */
+        #main-content{flex:1;position:relative;background:var(--bg);overflow:hidden;}
+        #main-content::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background-image:radial-gradient(circle,rgba(148,163,184,0.1) 1px,transparent 1px);background-size:28px 28px;}
+        #main-content::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse 90% 90% at 50% 50%,transparent 45%,rgba(6,8,15,0.65) 100%);}
+        #cy{width:100%;height:100%;position:relative;z-index:2;}
+
+        /* ZOOM CONTROLS */
+        .graph-controls{position:absolute;bottom:24px;right:24px;z-index:10;display:flex;flex-direction:column;gap:4px;}
+        .gc-btn{width:36px;height:36px;background:rgba(10,14,26,.92);border:1px solid var(--border-hi);color:var(--t2);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:var(--ff-mono);}
+        .gc-btn:hover{background:var(--s3);border-color:rgba(56,189,248,.3);color:var(--t1);}
+        .gc-sep{height:1px;background:var(--border);margin:2px 0;}
+
+        /* MINIMAP */
+        #minimap{position:absolute;bottom:24px;left:24px;z-index:10;width:160px;height:108px;background:rgba(10,14,26,.92);border:1px solid var(--border-hi);border-radius:8px;overflow:hidden;}
+        #minimap-canvas{width:100%;height:100%;}
+        .minimap-label{position:absolute;top:7px;left:9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);pointer-events:none;}
+
+        /* TOOLTIP */
+        #node-tooltip{position:fixed;z-index:100;pointer-events:none;background:var(--s1);border:1px solid var(--border-hi);border-left:3px solid var(--cyan);border-radius:8px;padding:10px 14px;font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,.7);opacity:0;transition:opacity .15s;max-width:220px;}
+        #node-tooltip.show{opacity:1;}
+        .tt-type{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:4px;}
+        .tt-name{font-weight:700;color:var(--t1);margin-bottom:6px;word-break:break-all;}
+        .tt-row{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--t2);margin-top:3px;}
+        .tt-val{color:var(--cyan);}
+
+        /* SEARCH */
+        #graph-search-wrap{position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:10;display:flex;}
+        #graph-search{background:rgba(10,14,26,.92);border:1px solid var(--border-hi);color:var(--t1);padding:8px 14px;border-radius:6px 0 0 6px;font-family:var(--ff-mono);font-size:12px;outline:none;width:220px;caret-color:var(--cyan);transition:border-color .2s,width .3s;}
+        #graph-search::placeholder{color:var(--t3);}
+        #graph-search:focus{border-color:var(--cyan);width:280px;}
+        #graph-search-clear{background:rgba(10,14,26,.92);border:1px solid var(--border-hi);border-left:none;color:var(--t3);padding:8px 12px;cursor:pointer;border-radius:0 6px 6px 0;font-size:13px;transition:color .15s;}
+        #graph-search-clear:hover{color:var(--t1);}
+
+        /* LEGEND */
+        .graph-legend{position:absolute;top:18px;right:18px;z-index:10;background:rgba(10,14,26,.88);border:1px solid var(--border-hi);border-radius:6px;padding:10px 14px;backdrop-filter:blur(8px);}
+        .gl-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t2);margin-bottom:5px;letter-spacing:.04em;}
+        .gl-row:last-child{margin:0;}
+        .gl-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+        .gl-dot.cls{background:#3b82f6;}
+        .gl-dot.mth{background:var(--amber);border-radius:50%;width:9px;height:9px;}
+        .gl-line{width:18px;height:1.5px;background:rgba(148,163,184,.3);}
+
+        /* DETAIL PANEL */
+        #detail-panel{position:absolute;right:0;top:0;bottom:0;z-index:30;width:var(--panel-w);background:var(--s1);border-left:1px solid var(--border-hi);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.5);}
+        #detail-panel.open{transform:translateX(0);}
+        #detail-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);}
+        .dp-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--t3);cursor:pointer;font-size:18px;line-height:1;padding:4px;transition:color .15s;}
+        .dp-close:hover{color:var(--t1);}
+        .dp-header{padding:24px 20px 16px;border-bottom:1px solid var(--border);}
+        .dp-eyebrow{font-size:9px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px;}
+        .dp-eyebrow.cls{color:#60a5fa;} .dp-eyebrow.mth{color:var(--amber);}
+        .dp-name{font-family:var(--ff-display);font-size:18px;font-weight:700;word-break:break-all;line-height:1.2;}
+        .dp-body{padding:18px;flex:1;overflow-y:auto;}
+        .dp-body::-webkit-scrollbar{width:3px;}
+        .dp-body::-webkit-scrollbar-thumb{background:var(--border-hi);}
+        .dp-section{margin-bottom:20px;}
+        .dp-section-title{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:10px;}
+        .dp-kv{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
+        .dp-kv:last-child{border:none;}
+        .dp-k{color:var(--t2);}
+        .dp-v{color:var(--t1);text-align:right;}
+        .dp-v.hi{color:var(--cyan);}
+        .conn-chip{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;margin:3px 3px 0 0;cursor:pointer;border:1px solid var(--border-hi);color:var(--t2);background:var(--s2);transition:all .15s;}
+        .conn-chip:hover{border-color:var(--cyan);color:var(--cyan);}
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+    <div class="sh">
+        <div class="sh-eyebrow">// codebase knowledge graph · v1</div>
+        <h1 class="sh-brand">CODE<em>BASE</em> INTEL</h1>
+        <div class="sh-meta">
+            <span class="pill pill-green" id="status-pill"><span class="pdot"></span><span id="status-text">[[${status}]]</span></span>
+            <span class="pill pill-cyan">[[${title}]]</span>
+        </div>
+    </div>
+    <div class="stats">
+        <div class="stat"><div class="stat-n" id="sn">—</div><div class="stat-l">Nodes</div></div>
+        <div class="stat"><div class="stat-n" id="se">—</div><div class="stat-l">Edges</div></div>
+        <div class="stat"><div class="stat-n" id="sc">—</div><div class="stat-l">Classes</div></div>
+    </div>
+    <div id="chat-output">
+        <div class="msg ai-msg">System initialized. Context loaded for <strong>[[${title}]]</strong>. Click any node to inspect it, or ask a question below.</div>
+    </div>
+    <div class="input-area">
+        <div class="input-wrap">
+            <span class="input-pre">&gt;_</span>
+            <input type="text" id="q" placeholder="Query logic or dependencies…" onkeypress="if(event.key==='Enter') ask()">
+            <button class="send-btn" onclick="ask()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+        <div class="input-hint">⏎ Enter to send · Click any node for details</div>
+    </div>
+</div>
+
+<!-- GRAPH AREA -->
+<div id="main-content">
+    <div id="cy"></div>
+
+    <div id="node-tooltip">
+        <div class="tt-type" id="tt-type"></div>
+        <div class="tt-name" id="tt-name"></div>
+        <div class="tt-row"><span>Connections</span><span class="tt-val" id="tt-deg"></span></div>
+        <div class="tt-row"><span>ID</span><span class="tt-val" id="tt-id"></span></div>
+    </div>
+
+    <div id="graph-search-wrap">
+        <input id="graph-search" type="text" placeholder="Search nodes…" oninput="graphSearch(this.value)">
+        <button id="graph-search-clear" onclick="clearSearch()">✕</button>
+    </div>
+
+    <div class="graph-legend">
+        <div class="gl-row"><div class="gl-dot cls"></div> Class</div>
+        <div class="gl-row"><div class="gl-dot mth"></div> Method</div>
+        <div class="gl-row"><div class="gl-line"></div> Dependency</div>
+    </div>
+
+    <div class="graph-controls">
+        <button class="gc-btn" onclick="cy.zoom({level:cy.zoom()*1.2,renderedPosition:{x:cy.width()/2,y:cy.height()/2}})" title="Zoom In +20%">+</button>
+        <button class="gc-btn" onclick="cy.zoom({level:cy.zoom()*.8,renderedPosition:{x:cy.width()/2,y:cy.height()/2}})" title="Zoom Out −20%">−</button>
+        <div class="gc-sep"></div>
+        <button class="gc-btn" onclick="cy.fit(undefined,60)" title="Fit" style="font-size:12px;">⊡</button>
+        <button class="gc-btn" onclick="cy.reset()" title="Reset" style="font-size:11px;">⟳</button>
+    </div>
+
+    <div id="minimap">
+        <canvas id="minimap-canvas"></canvas>
+        <div class="minimap-label">Overview</div>
+    </div>
+
+    <div id="detail-panel">
+        <button class="dp-close" onclick="closePanel()">✕</button>
+        <div class="dp-header">
+            <div class="dp-eyebrow" id="dp-type"></div>
+            <div class="dp-name" id="dp-name"></div>
+        </div>
+        <div class="dp-body">
+            <div class="dp-section">
+                <div class="dp-section-title">Properties</div>
+                <div id="dp-dynamic-props"></div>
+            </div>
+            <div class="dp-section">
+                <div class="dp-section-title">Connected Nodes</div>
+                <div id="dp-connections"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    /* ═══════════════════════════════════════════════
+       THRESHOLDS
+       ═══════════════════════════════════════════════ */
+    const LARGE_GRAPH   = 2000;  // skip physics layout above this
+    const MEDIUM_GRAPH  = 500;   // use lighter layout above this
+    const BATCH_SIZE    = 300;   // nodes added per animation frame
+    const LOD_HIDE_EDGE = 0.25;  // zoom level below which edges are hidden
+    const LOD_HIDE_LBL  = 0.40;  // zoom level below which labels are hidden
+    const MAX_CHIPS     = 50;    // max neighbour chips shown in detail panel
+    const MM_THROTTLE   = 120;   // minimap redraw throttle (ms)
+    const SEARCH_DEBOUNCE = 200; // search debounce (ms)
+
+    /* ═══════════════════════════════════════════════
+       CYTOSCAPE INIT — with large-graph perf flags
+       ═══════════════════════════════════════════════ */
+    const cy = cytoscape({
+        container: document.getElementById('cy'),
+        // Viewport performance — critical for 1k+ nodes
+        textureOnViewport: true,    // freeze to texture while panning/zooming
+        hideEdgesOnViewport: true,  // skip edge redraws during motion
+        hideLabelsOnViewport: true, // skip label redraws during motion
+        motionBlur: false,
+        pixelRatio: Math.min(window.devicePixelRatio, 1.5),
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'label': 'data(label)',
+                    'font-family': '"Space Mono", monospace',
+                    'font-weight': '700',
+                    'color': '#e2eaf7',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-outline-width': 1.5,
+                    'text-outline-color': '#06080f',
+                    'text-wrap': 'ellipsis',
+                    'overflow': 'hidden',
+                    'transition-property': 'opacity, border-width, border-color, background-color',
+                    'transition-duration': '150ms'
+                }
+            },
+            {
+                selector: 'node[type="Class"]',
+                style: {
+                    'shape': 'round-rectangle',
+                    'width': 'mapData(degree, 1, 10, 72, 120)',
+                    'height': 34,
+                    'font-size': '9px',
+                    'text-max-width': 'mapData(degree, 1, 10, 54, 102)',
+                    'background-color': '#1e3a8a',
+                    'border-color': '#3b82f6',
+                    'border-width': 1.5
+                }
+            },
+            {
+                selector: 'node[type="Method"]',
+                style: {
+                    'shape': 'ellipse',
+                    'width': 'mapData(degree, 1, 8, 44, 64)',
+                    'height': 'mapData(degree, 1, 8, 44, 64)',
+                    'font-size': '8px',
+                    'text-max-width': 'mapData(degree, 1, 8, 30, 48)',
+                    'background-color': '#451a03',
+                    'border-color': '#f59e0b',
+                    'border-width': 1.5
+                }
+            },
+            // LOD — labels hidden at low zoom (applied via class)
+            {
+                selector: 'node.lod-no-label',
+                style: { 'label': '' }
+            },
+            {
+                selector: 'node.selected',
+                style: { 'border-color': '#38bdf8', 'border-width': 3, 'background-color': '#0c2a5e' }
+            },
+            {
+                selector: 'node.dimmed',
+                style: { 'opacity': 0.08 }
+            },
+            {
+                selector: 'node.highlighted',
+                style: { 'border-color': '#38bdf8', 'border-width': 2.5, 'opacity': 1 }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'width': 1.2,
+                    'line-color': 'rgba(100,140,200,0.2)',
+                    'target-arrow-color': 'rgba(100,140,200,0.3)',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 0.7,
+                    'curve-style': 'bezier',
+                    'opacity': 0.85,
+                    'transition-property': 'opacity, line-color, width',
+                    'transition-duration': '150ms'
+                }
+            },
+            // LOD — edges hidden at very low zoom
+            {
+                selector: 'edge.lod-hidden',
+                style: { 'display': 'none' }
+            },
+            {
+                selector: 'edge.dimmed',
+                style: { 'opacity': 0.04 }
+            },
+            {
+                selector: 'edge.highlighted',
+                style: {
+                    'line-color': 'rgba(56,189,248,0.55)',
+                    'target-arrow-color': 'rgba(56,189,248,0.55)',
+                    'opacity': 1, 'width': 2
+                }
+            }
+        ],
+        layout: { name: 'preset' }, // layout chosen dynamically after load
+        minZoom: 0.01,
+        maxZoom: 6
+    });
+
+    /* ═══════════════════════════════════════════════
+       LEVEL-OF-DETAIL — zoom-based class toggling
+       ═══════════════════════════════════════════════ */
+    cy.on('zoom', () => {
+        const z = cy.zoom();
+        // Hide edges below LOD_HIDE_EDGE zoom
+        if (z < LOD_HIDE_EDGE) cy.edges().addClass('lod-hidden');
+        else                   cy.edges().removeClass('lod-hidden');
+        // Hide labels below LOD_HIDE_LBL zoom
+        if (z < LOD_HIDE_LBL) cy.nodes().addClass('lod-no-label');
+        else                   cy.nodes().removeClass('lod-no-label');
+    });
+
+    /* ═══════════════════════════════════════════════
+       LAYOUT SELECTION — based on node count
+       ═══════════════════════════════════════════════ */
+    function pickLayout(nodeCount) {
+        if (nodeCount > LARGE_GRAPH) {
+            // Grid: instant O(n), still readable
+            return { name: 'grid', animate: false, padding: 60, fit: true };
+        }
+        if (nodeCount > MEDIUM_GRAPH) {
+            // Breadthfirst: O(n log n), fast and hierarchical
+            return { name: 'breadthfirst', animate: true, padding: 60, fit: true, spacingFactor: 1.4 };
+        }
+        // Full physics for small graphs
+        return {
+            name: 'cose', animate: true, padding: 80, fit: true,
+            nodeRepulsion: () => 9000,
+            idealEdgeLength: () => 90,
+            edgeElasticity: () => 100,
+            gravity: 1, numIter: 1200
+        };
+    }
+
+    /* ═══════════════════════════════════════════════
+       BATCH LOADING — add nodes in chunks so the
+       UI stays responsive throughout
+       ═══════════════════════════════════════════════ */
+    function batchAdd(data, onComplete) {
+        const total = data.length;
+        let i = 0;
+
+        // Separate nodes and edges; load nodes first
+        const nodes = data.filter(el => !el.data.source);
+        const edges = data.filter(el =>  el.data.source);
+        const ordered = [...nodes, ...edges];
+
+        setStatus(`LOADING 0 / ${total}`);
+
+        function addChunk() {
+            const chunk = ordered.slice(i, i + BATCH_SIZE);
+            if (chunk.length === 0) { onComplete(); return; }
+            cy.add(chunk);
+            i += BATCH_SIZE;
+            setStatus(`LOADING ${Math.min(i, total)} / ${total}`);
+            requestAnimationFrame(addChunk);
+        }
+        addChunk();
+    }
+
+    /* ═══════════════════════════════════════════════
+       GRAPH LOADER
+       ═══════════════════════════════════════════════ */
+    function calcDegrees() {
+        cy.nodes().forEach(n => n.data('degree', Math.max(1, n.connectedEdges().length)));
+    }
+
+    function updateStats() {
+        document.getElementById('sn').textContent = cy.nodes().length.toLocaleString();
+        document.getElementById('se').textContent = cy.edges().length.toLocaleString();
+        document.getElementById('sc').textContent = cy.nodes('[type="Class"]').length.toLocaleString();
+    }
+
+    function setStatus(text) {
+        document.getElementById('status-text').textContent = text;
+    }
+
+    function loadGraph(retries = 5) {
+        fetch('/api/graph')
+            .then(r => r.json())
+            .then(data => {
+                if (data.length === 0 && retries > 0) return setTimeout(() => loadGraph(retries-1), 2000);
+
+                const nodeCount = data.filter(el => !el.data.source).length;
+
+                // Warn user if graph is very large
+                if (nodeCount > LARGE_GRAPH) {
+                    appendChat('ai', `⚠️ Large graph detected: **${nodeCount.toLocaleString()} nodes**. Using grid layout for performance. Zoom in to explore clusters.`);
+                }
+
+                // Batch load data, then run layout
+                batchAdd(data, () => {
+                    calcDegrees();
+                    cy.layout(pickLayout(nodeCount)).run();
+                    updateStats();
+                    const sp = document.getElementById('status-pill');
+                    sp.className = 'pill pill-cyan';
+                    document.getElementById('status-text').textContent = 'ONLINE';
+                    schedMinimap();
+                });
+            })
+            .catch(() => { if (retries > 0) setTimeout(() => loadGraph(retries-1), 3000); });
+    }
+    loadGraph();
+
+    /* ═══════════════════════════════════════════════
+       TOOLTIP
+       ═══════════════════════════════════════════════ */
+    const tooltip = document.getElementById('node-tooltip');
+    cy.on('mouseover', 'node', evt => {
+        const n = evt.target, rp = evt.renderedPosition;
+        const ox = document.getElementById('sidebar').offsetWidth;
+        document.getElementById('tt-type').textContent = (n.data('type') || 'Node').toUpperCase();
+        document.getElementById('tt-name').textContent = n.data('label') || n.id();
+        document.getElementById('tt-deg').textContent  = n.connectedEdges().length;
+        document.getElementById('tt-id').textContent   = n.id();
+        tooltip.style.left = Math.min(ox + rp.x + 18, window.innerWidth - 240) + 'px';
+        tooltip.style.top  = Math.max(rp.y - 10, 10) + 'px';
+        tooltip.classList.add('show');
+    });
+    cy.on('mouseout', 'node', () => tooltip.classList.remove('show'));
+
+
+    /* ═══════════════════════════════════════════════
+       NODE CLICK — neighbourhood highlight
+       For very large graphs we skip full dimming
+       (toggling 10k classes at once causes a stall)
+       ═══════════════════════════════════════════════ */
+    cy.on('tap', 'node', evt => {
+        tooltip.classList.remove('show');
+        const n = evt.target;
+
+        highlightNeighborhood(n);
+        openPanel(n);
+
+        // Zoom in by 50% (1.5x) centered on the clicked node
+        cy.animate({
+            zoom: cy.zoom() * 1.5,
+            center: { eles: n },
+            duration: 400,
+            easing: 'ease-out-cubic'
+        });
+    });
+
+    cy.on('tap', evt => {
+        // If the background (core canvas) is clicked
+        if (evt.target === cy) {
+            clearHighlight();
+            closePanel();
+
+            // Reset the view to fit the entire graph gracefully
+            cy.animate({
+                fit: { padding: 60 },
+                duration: 400,
+                easing: 'ease-out-cubic'
+            });
+        }
+    });
+
+
+    function highlightNeighborhood(node) {
+        const totalNodes = cy.nodes().length;
+        cy.elements().removeClass('highlighted dimmed selected');
+
+        if (totalNodes > LARGE_GRAPH) {
+            // For huge graphs: only highlight/dim the local neighbourhood
+            // to avoid blocking the main thread with 10k class mutations
+            const hood = node.closedNeighborhood();
+            hood.addClass('highlighted');
+            node.addClass('selected').removeClass('highlighted');
+            // Dimming skipped — too expensive at this scale
+        } else {
+            const hood = node.closedNeighborhood();
+            cy.elements().not(hood).addClass('dimmed');
+            hood.addClass('highlighted');
+            node.addClass('selected').removeClass('highlighted');
+        }
+    }
+    function clearHighlight() {
+        cy.elements().removeClass('highlighted dimmed selected');
+    }
+
+    /* ═══════════════════════════════════════════════
+        DETAIL PANEL (WITH CODE INJECTION)
+        ═══════════════════════════════════════════════ */
+    function openPanel(n) {
+        const type = n.data('type') || 'Node';
+        const typeEl = document.getElementById('dp-type');
+        typeEl.textContent = type.toUpperCase();
+        typeEl.className = 'dp-eyebrow ' + (type === 'Class' ? 'cls' : 'mth');
+        document.getElementById('dp-name').textContent = n.data('label') || n.id();
+
+        const propsContainer = document.getElementById('dp-dynamic-props');
+        const nodeData = n.data();
+
+        let propsHtml = '';
+        let codeHtml = ''; // Separate container for the code block
+
+        // Standard Topological Data
+        propsHtml += `<div class="dp-kv"><span class="dp-k">ID</span><span class="dp-v">${n.id()}</span></div>`;
+        propsHtml += `<div class="dp-kv"><span class="dp-k">Type</span><span class="dp-v hi">${type}</span></div>`;
+        propsHtml += `<div class="dp-kv"><span class="dp-k">Connections</span><span class="dp-v hi">${n.connectedEdges().length}</span></div>`;
+
+        // Dynamic Data Loop
+        for (const [key, value] of Object.entries(nodeData)) {
+            if (['id', 'label', 'type', 'degree'].includes(key)) continue;
+
+            // FIX: Isolate 'content' and render as a formatted block
+            if (key === 'content' && value) {
+                // Sanitize HTML tags to prevent XSS and rendering breaks
+                const safeCode = value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                codeHtml = `
+          <div class="dp-section" style="margin-top: 24px;">
+            <div class="dp-section-title">Source Logic</div>
+            <pre style="background:rgba(0,0,0,0.6); border:1px solid var(--border-hi); border-radius:6px; padding:12px; font-size:10px; overflow-x:auto; color:var(--amber); white-space:pre-wrap;"><code>${safeCode}</code></pre>
+          </div>`;
+                continue;
+            }
+
+            const displayVal = typeof value === 'object' ? JSON.stringify(value) : value;
+            propsHtml += `<div class="dp-kv"><span class="dp-k" style="text-transform: capitalize;">${key}</span><span class="dp-v" style="word-break: break-all;">${displayVal}</span></div>`;
+        }
+
+        // Inject properties first, then append the code block at the bottom
+        propsContainer.innerHTML = propsHtml + codeHtml;
+
+        // Build Connections List
+        const connEl = document.getElementById('dp-connections');
+        const neighbors = n.neighborhood('node');
+        const shown = neighbors.slice(0, MAX_CHIPS);
+        const extra = neighbors.length - shown.length;
+        connEl.innerHTML = shown.length
+            ? shown.map(nb => `<span class="conn-chip" onclick="focusNode('${nb.id()}')">${nb.data('label')||nb.id()}</span>`).join('')
+            + (extra > 0 ? `<span class="conn-chip" style="opacity:.5;cursor:default">+${extra} more</span>` : '')
+            : '<span style="color:var(--t3);font-size:12px;">No connections</span>';
+
+        document.getElementById('detail-panel').classList.add('open');
+    }
+
+    function closePanel() { document.getElementById('detail-panel').classList.remove('open'); }
+    function focusNode(id) {
+        const n = cy.getElementById(id);
+        if (!n.length) return;
+        cy.animate({ fit: { eles: n, padding: 140 }, duration: 450, easing: 'ease-in-out-cubic' });
+        openPanel(n); highlightNeighborhood(n);
+    }
+
+    /* ═══════════════════════════════════════════════
+       SEARCH — debounced + Map-based O(1) lookup
+       ═══════════════════════════════════════════════ */
+    let nodeIndex = null; // label → node map, built once after load
+    let searchTimer = null;
+
+    function buildIndex() {
+        nodeIndex = new Map();
+        cy.nodes().forEach(n => {
+            nodeIndex.set((n.data('label') || n.id()).toLowerCase(), n.id());
+        });
+    }
+
+    function graphSearch(val) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => _doSearch(val), SEARCH_DEBOUNCE);
+    }
+
+    function _doSearch(val) {
+        if (!val.trim()) { clearSearch(); return; }
+        if (!nodeIndex) buildIndex();
+        const q = val.toLowerCase();
+        cy.batch(() => {
+            cy.nodes().forEach(n => {
+                const label = (n.data('label') || n.id()).toLowerCase();
+                n.removeClass('highlighted dimmed');
+                label.includes(q) ? n.addClass('highlighted') : n.addClass('dimmed');
+            });
+            cy.edges().addClass('dimmed');
+        });
+    }
+
+    function clearSearch() {
+        document.getElementById('graph-search').value = '';
+        clearHighlight();
+    }
+
+    /* ═══════════════════════════════════════════════
+       MINIMAP — throttled, never on every render
+       ═══════════════════════════════════════════════ */
+    const mmCanvas = document.getElementById('minimap-canvas');
+    const mmCtx = mmCanvas.getContext('2d');
+    let mmTimer = null;
+
+    function schedMinimap() {
+        if (mmTimer) return;
+        mmTimer = setTimeout(() => { mmTimer = null; drawMinimap(); }, MM_THROTTLE);
+    }
+
+    function drawMinimap() {
+        const container = document.getElementById('minimap');
+        const dpr = Math.min(window.devicePixelRatio, 2);
+        mmCanvas.width  = container.offsetWidth  * dpr;
+        mmCanvas.height = container.offsetHeight * dpr;
+        mmCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        mmCtx.clearRect(0, 0, container.offsetWidth, container.offsetHeight);
+        if (!cy.nodes().length) return;
+
+        const bb = cy.elements().boundingBox();
+        const pad = 10;
+        const sw = container.offsetWidth - pad*2, sh = container.offsetHeight - pad*2;
+        const scale = Math.min(sw / (bb.w||1), sh / (bb.h||1)) * 0.88;
+        const ox = pad + (sw - bb.w*scale)/2, oy = pad + (sh - bb.h*scale)/2;
+
+        // Only draw edges if graph is small enough to be legible
+        if (cy.nodes().length <= LARGE_GRAPH) {
+            mmCtx.strokeStyle = 'rgba(100,140,200,0.15)';
+            mmCtx.lineWidth = 0.5;
+            cy.edges().forEach(e => {
+                const s = e.source().position(), t = e.target().position();
+                mmCtx.beginPath();
+                mmCtx.moveTo(ox+(s.x-bb.x1)*scale, oy+(s.y-bb.y1)*scale);
+                mmCtx.lineTo(ox+(t.x-bb.x1)*scale, oy+(t.y-bb.y1)*scale);
+                mmCtx.stroke();
+            });
+        }
+
+        cy.nodes().forEach(n => {
+            const p = n.position();
+            mmCtx.beginPath();
+            const r = n.data('type') === 'Class' ? 3 : 1.8;
+            mmCtx.arc(ox+(p.x-bb.x1)*scale, oy+(p.y-bb.y1)*scale, r, 0, Math.PI*2);
+            mmCtx.fillStyle = n.data('type') === 'Class' ? '#3b82f6' : '#f59e0b';
+            mmCtx.fill();
+        });
+    }
+
+    // Throttle: redraw minimap at most every MM_THROTTLE ms
+    cy.on('render', schedMinimap);
+
+    /* ═══════════════════════════════════════════════
+       MAGNETIC DRAG — Neighbors follow the dragged node
+       Ratio: Dragged node moves 1.5x, Neighbors move 1.0x
+       ═══════════════════════════════════════════════ */
+    let lastDragPos = null;
+
+    // 1. Capture the exact position when the user first clicks and holds a node
+    cy.on('grab', 'node', evt => {
+        lastDragPos = { ...evt.target.position() };
+    });
+
+    // 2. Fire continuously while the node is being dragged
+    cy.on('drag', 'node', evt => {
+        // Only apply magnetic drag if a single node is being moved
+        if (cy.$(':grabbed').length > 1) return;
+
+        const node = evt.target;
+        const pos = node.position();
+
+        if (lastDragPos) {
+            // Calculate how far the mouse/node moved in this specific micro-frame
+            const dx = pos.x - lastDragPos.x;
+            const dy = pos.y - lastDragPos.y;
+
+            // Apply the 1 to 1.5 ratio (which translates to 2/3 distance)
+            const FOLLOW_RATIO = 1 / 1.5;
+
+            // Use cy.batch() for high performance so the UI doesn't lag
+            cy.batch(() => {
+                // Find all directly connected nodes
+                node.neighborhood('node').forEach(neighbor => {
+                    // Prevent moving nodes that are locked or also being grabbed
+                    if (!neighbor.grabbed() && !neighbor.locked()) {
+                        const np = neighbor.position();
+                        neighbor.position({
+                            x: np.x + (dx * FOLLOW_RATIO),
+                            y: np.y + (dy * FOLLOW_RATIO)
+                        });
+                    }
+                });
+            });
+        }
+
+        // Save the new position for the next micro-frame of the drag
+        lastDragPos = { ...pos };
+    });
+
+    // 3. Clear the position tracking when the user drops the node
+    cy.on('free', 'node', () => {
+        lastDragPos = null;
+    });
+
+    /* ═══════════════════════════════════════════════
+       CUSTOM MOUSE WHEEL ZOOM (THROTTLED)
+       Asymmetrical scaling: +40% In (1.4x) / -15% Out (0.85x)
+       ═══════════════════════════════════════════════ */
+    let lastWheelTime = 0;
+
+    document.getElementById('cy').addEventListener('wheel', (evt) => {
+        // 1. Stop default behavior
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        // 2. Time-gate: Only allow one zoom calculation every 150 milliseconds
+        // This prevents the browser from compounding rapid-fire wheel events
+        const now = Date.now();
+        if (now - lastWheelTime < 150) return;
+        lastWheelTime = now;
+
+        const currentZoom = cy.zoom();
+
+        // 3. Apply exact mathematical ratios
+        let newZoom = evt.deltaY < 0
+            ? currentZoom * 1.40   // Exactly +40%
+            : currentZoom * 0.85;  // Exactly -15%
+
+        newZoom = Math.max(cy.minZoom(), Math.min(newZoom, cy.maxZoom()));
+
+        // 4. Smoothly animate the jump to the new zoom level
+        cy.animate({
+            zoom: {
+                level: newZoom,
+                renderedPosition: { x: evt.offsetX, y: evt.offsetY }
+            },
+            duration: 150, // Matches the throttle time for a seamless visual transition
+            easing: 'ease-out-quad'
+        });
+    }, { passive: false, capture: true });
+
+    /* ═══════════════════════════════════════════════
+       CHAT
+       ═══════════════════════════════════════════════ */
+    function appendChat(role, text) {
+        const out = document.getElementById('chat-output');
+        out.innerHTML += role === 'ai'
+            ? `<div class="msg ai-msg">${marked.parse(text)}</div>`
+            : `<div class="msg user-msg">${text}</div>`;
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function ask() {
+        const input = document.getElementById('q');
+        const q = input.value.trim(); if (!q) return;
+        appendChat('user', q);
+        const out = document.getElementById('chat-output');
+        const id = 'l'+Date.now();
+        out.innerHTML += `<div class="msg ai-msg" id="${id}"><div class="dots"><span></span><span></span><span></span></div></div>`;
+        out.scrollTop = out.scrollHeight; input.value = '';
+        fetch('/api/chat?question=' + encodeURIComponent(q))
+            .then(r => r.text())
+            .then(txt => {
+                const el = document.getElementById(id);
+                if (el) el.outerHTML = `<div class="msg ai-msg">${marked.parse(txt)}</div>`;
+                out.scrollTop = out.scrollHeight;
+            })
+            .catch(() => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<span style="color:var(--red)">Request failed.</span>';
+            });
+    }
+</script>
+</body>
+</html>
