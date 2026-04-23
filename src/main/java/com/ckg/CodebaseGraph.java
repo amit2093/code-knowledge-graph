@@ -17,7 +17,6 @@ public class CodebaseGraph {
     private final Map<String, CodeMethod> methodRegistry = new ConcurrentHashMap<>();
     private final Map<String, CodeClass> classRegistry = new ConcurrentHashMap<>();
 
-    // FIX: Change return type to Graph<Object, DefaultEdge>
     public Graph<Object, DefaultEdge> getGraph() {
         return graph;
     }

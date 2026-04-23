@@ -44,7 +44,6 @@ public class GraphIngestionService {
         // 1. Filtered Vertex Creation
         List<CtClass> classes = launcher.getModel().getElements(new TypeFilter<>(CtClass.class));
         for (CtClass<?> ctClass : classes) {
-            // FIX: Check exclusion logic
             if (isExcluded(ctClass)) continue;
 
             CodeClass classNode = new CodeClass(ctClass.getQualifiedName(), ctClass.getSimpleName());
@@ -52,7 +51,7 @@ public class GraphIngestionService {
             graph.addVertex(classNode);
 
             for (CtMethod<?> ctMethod : ctClass.getMethods()) {
-                // FIX: Skip boilerplate getters/setters/etc.
+                // Skip getters/setters/etc.
                 if (isBoilerplate(ctMethod)) continue;
 
                 CodeMethod methodNode = new CodeMethod(ctMethod.getSignature(), ctMethod.getSimpleName());
@@ -82,11 +81,10 @@ public class GraphIngestionService {
         }
     }
 
-    // Exclusion logic
     private boolean isExcluded(CtClass<?> ctClass) {
         String qName = ctClass.getQualifiedName().toLowerCase();
         return qName.contains(".model.")
-        || qName.contains(".pojo.");
+            || qName.contains(".pojo.");
     }
 
     private boolean isBoilerplate(CtMethod<?> method) {

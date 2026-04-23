@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
-    <title>CKG | Intelligence Engine</title>
+    <title>Code Knowledge Graph</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #06080f;
+            --bg: black;
             --s1: #0a0e1a;
             --s2: #0d1525;
             --s3: #111d30;
@@ -92,7 +92,7 @@
 
         /* ZOOM CONTROLS */
         .graph-controls{position:absolute;bottom:24px;right:24px;z-index:10;display:flex;flex-direction:column;gap:4px;}
-        .gc-btn{width:36px;height:36px;background:rgba(10,14,26,.92);border:1px solid var(--border-hi);color:var(--t2);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:var(--ff-mono);}
+        .gc-btn{width:36px;height:36px;background:rgba(40,40,40,.40);border:1px solid var(--border-hi);color:var(--t2);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:var(--ff-mono);}
         .gc-btn:hover{background:var(--s3);border-color:rgba(56,189,248,.3);color:var(--t1);}
         .gc-sep{height:1px;background:var(--border);margin:2px 0;}
 
@@ -102,7 +102,7 @@
         .minimap-label{position:absolute;top:7px;left:9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);pointer-events:none;}
 
         /* TOOLTIP */
-        #node-tooltip{position:fixed;z-index:100;pointer-events:none;background:var(--s1);border:1px solid var(--border-hi);border-left:3px solid var(--cyan);border-radius:8px;padding:10px 14px;font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,.7);opacity:0;transition:opacity .15s;max-width:220px;}
+        #node-tooltip{position:fixed;z-index:100;pointer-events:none;background:var(--s1);border:1px solid var(--border-hi);border-left:3px solid var(--cyan);border-radius:8px;padding:10px 14px;font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,.7);opacity:0;transition:opacity .15s;max-width:100%; min-width:5%}
         #node-tooltip.show{opacity:1;}
         .tt-type{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:4px;}
         .tt-name{font-weight:700;color:var(--t1);margin-bottom:6px;word-break:break-all;}
@@ -156,7 +156,7 @@
 <div id="sidebar">
     <div class="sh">
         <div class="sh-eyebrow">// codebase knowledge graph · v1</div>
-        <h1 class="sh-brand">CODE<em>BASE</em> INTEL</h1>
+        <h1 class="sh-brand">Code <em>Knowledge</em></h1>
         <div class="sh-meta">
             <span class="pill pill-green" id="status-pill"><span class="pdot"></span><span id="status-text">[[${status}]]</span></span>
             <span class="pill pill-cyan">[[${title}]]</span>
@@ -189,8 +189,8 @@
     <div id="node-tooltip">
         <div class="tt-type" id="tt-type"></div>
         <div class="tt-name" id="tt-name"></div>
-        <div class="tt-row"><span>Connections</span><span class="tt-val" id="tt-deg"></span></div>
-        <div class="tt-row"><span>ID</span><span class="tt-val" id="tt-id"></span></div>
+        <div class="tt-row"><span>Connections </span><span class="tt-val" id="tt-deg"></span></div>
+        <div class="tt-row"><span>ID </span><span class="tt-val" id="tt-id"></span></div>
     </div>
 
     <div id="graph-search-wrap">
@@ -245,7 +245,7 @@
     const BATCH_SIZE    = 300;   // nodes added per animation frame
     const LOD_HIDE_EDGE = 0.25;  // zoom level below which edges are hidden
     const LOD_HIDE_LBL  = 0.40;  // zoom level below which labels are hidden
-    const MAX_CHIPS     = 50;    // max neighbour chips shown in detail panel
+    const MAX_CHIPS     = 500;   // max neighbour chips shown in detail panel
     const MM_THROTTLE   = 120;   // minimap redraw throttle (ms)
     const SEARCH_DEBOUNCE = 200; // search debounce (ms)
 
@@ -270,7 +270,7 @@
                     'color': '#e2eaf7',
                     'text-valign': 'center',
                     'text-halign': 'center',
-                    'text-outline-width': 1.5,
+                    'text-outline-width': 0.85,
                     'text-outline-color': '#06080f',
                     'text-wrap': 'ellipsis',
                     'overflow': 'hidden',
@@ -282,10 +282,12 @@
                 selector: 'node[type="Class"]',
                 style: {
                     'shape': 'round-rectangle',
-                    'width': 'mapData(degree, 1, 10, 72, 120)',
-                    'height': 34,
-                    'font-size': '9px',
-                    'text-max-width': 'mapData(degree, 1, 10, 54, 102)',
+                    'width': 'label',              // ← auto-fits to text width
+                    'height': 'label',             // ← auto-fits to text height
+                    'padding': '8px 14px',         // ← breathing room around the label
+                    'font-size': '16px',
+                    'text-wrap': 'none',           // ← full name, no truncation
+                    // 'text-max-width': 'mapData(degree, 1, 10, 54, 102)',
                     'background-color': '#1e3a8a',
                     'border-color': '#3b82f6',
                     'border-width': 1.5
@@ -297,7 +299,7 @@
                     'shape': 'ellipse',
                     'width': 'mapData(degree, 1, 8, 44, 64)',
                     'height': 'mapData(degree, 1, 8, 44, 64)',
-                    'font-size': '8px',
+                    'font-size': '12px',
                     'text-max-width': 'mapData(degree, 1, 8, 30, 48)',
                     'background-color': '#451a03',
                     'border-color': '#f59e0b',
@@ -325,17 +327,17 @@
                 selector: 'edge',
                 style: {
                     'width': 1.2,
-                    'line-color': 'rgba(100,140,200,0.2)',
-                    'target-arrow-color': 'rgba(100,140,200,0.3)',
+                    'line-color': 'rgba(100,140,200,0.85)',
+                    'target-arrow-color': 'rgba(100,140,200,0.85)',
                     'target-arrow-shape': 'triangle',
-                    'arrow-scale': 0.7,
+                    'arrow-scale': 1,
                     'curve-style': 'bezier',
                     'opacity': 0.85,
                     'transition-property': 'opacity, line-color, width',
                     'transition-duration': '150ms'
                 }
             },
-            // LOD — edges hidden at very low zoom
+            // edges hidden at very low zoom
             {
                 selector: 'edge.lod-hidden',
                 style: { 'display': 'none' }
@@ -347,8 +349,8 @@
             {
                 selector: 'edge.highlighted',
                 style: {
-                    'line-color': 'rgba(56,189,248,0.55)',
-                    'target-arrow-color': 'rgba(56,189,248,0.55)',
+                    'line-color': 'rgba(56,189,248,0.95)',
+                    'target-arrow-color': 'rgba(56,189,248,0.95)',
                     'opacity': 1, 'width': 2
                 }
             }
@@ -558,9 +560,9 @@
         let codeHtml = ''; // Separate container for the code block
 
         // Standard Topological Data
-        propsHtml += `<div class="dp-kv"><span class="dp-k">ID</span><span class="dp-v">${n.id()}</span></div>`;
-        propsHtml += `<div class="dp-kv"><span class="dp-k">Type</span><span class="dp-v hi">${type}</span></div>`;
-        propsHtml += `<div class="dp-kv"><span class="dp-k">Connections</span><span class="dp-v hi">${n.connectedEdges().length}</span></div>`;
+        propsHtml += `<div class="dp-kv"><span class="dp-k">ID </span><span class="dp-v">${n.id()}</span></div>`;
+        propsHtml += `<div class="dp-kv"><span class="dp-k">Type </span><span class="dp-v hi">${type}</span></div>`;
+        propsHtml += `<div class="dp-kv"><span class="dp-k">Connections </span><span class="dp-v hi">${n.connectedEdges().length}</span></div>`;
 
         // Dynamic Data Loop
         for (const [key, value] of Object.entries(nodeData)) {
@@ -573,7 +575,17 @@
                 codeHtml = `
           <div class="dp-section" style="margin-top: 24px;">
             <div class="dp-section-title">Source Logic</div>
-            <pre style="background:rgba(0,0,0,0.6); border:1px solid var(--border-hi); border-radius:6px; padding:12px; font-size:10px; overflow-x:auto; color:var(--amber); white-space:pre-wrap;"><code>${safeCode}</code></pre>
+            <pre style="
+                    background:rgba(0,0,0,0.1);
+                    border:1px solid var(--border-hi);
+                    border-radius:6px;
+                    padding:12px;
+                    font-size:10px;
+                    overflow-x:auto;
+                    color:var(--amber);
+                    white-space:pre-wrap;">
+               <code>${safeCode}</code>
+            </pre>
           </div>`;
                 continue;
             }

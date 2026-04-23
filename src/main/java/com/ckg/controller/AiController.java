@@ -1,7 +1,6 @@
 package com.ckg.controller;
 
 import com.ckg.CodebaseGraph;
-import com.ckg.service.ImpactAnalysisService;
 import com.ckg.service.LogicChatService;
 import com.ckg.model.CodeClass;
 import com.ckg.model.CodeMethod;
@@ -12,29 +11,22 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 public class AiController {
-    private final ImpactAnalysisService analysisService;
-    private final LogicChatService logicChatService; // Switch to LogicChatService
-    private final CodebaseGraph codebaseGraph; // Switch to LogicChatService
+    private final LogicChatService logicChatService;
+    private final CodebaseGraph codebaseGraph;
 
-    public AiController(ImpactAnalysisService analysisService, LogicChatService logicChatService, CodebaseGraph codebaseGraph) {
-        this.analysisService = analysisService;
+    public AiController(LogicChatService logicChatService, CodebaseGraph codebaseGraph) {
         this.logicChatService = logicChatService;
         this.codebaseGraph = codebaseGraph;
     }
 
-    @GetMapping("/api/analyze")
-    public String analyze(@RequestParam String methodName) {
-        return analysisService.analyzeMethodChange(methodName);
-    }
-
     @GetMapping("/api/chat")
     public String chat(@RequestParam String question) {
-        // This now uses LogicChatService which includes code context
         return logicChatService.ask(question);
     }
 
@@ -45,7 +37,7 @@ public class AiController {
 
         // Add Nodes
         graph.vertexSet().forEach(v -> {
-            Map<String, Object> data = new java.util.HashMap<>();
+            Map<String, Object> data = new HashMap<>();
             if (v instanceof CodeClass c) {
                 data.put("id", c.getQualifiedName());
                 data.put("label", c.getSimpleName());
@@ -56,7 +48,7 @@ public class AiController {
                 data.put("label", m.getName());
                 data.put("type", "Method");
 
-                // FIX: Attach the raw source code
+                // Attach the raw source code
                 if (m.getContent() != null) {
                     data.put("content", m.getContent());
                 }

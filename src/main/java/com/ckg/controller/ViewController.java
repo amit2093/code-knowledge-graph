@@ -9,8 +9,8 @@ public class ViewController {
 
     @GetMapping("/")
     public String index(Model model) {
-        model.addAttribute("title", "CKG | In-Memory Intelligence");
-        model.addAttribute("status", "Running (In-Memory DSA)");
+        model.addAttribute("title", "In-Memory Intelligence");
+        model.addAttribute("status", "Running (In-Memory)");
         return "index";
     }
 }

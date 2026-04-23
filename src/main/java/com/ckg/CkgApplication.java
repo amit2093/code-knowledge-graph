@@ -19,7 +19,6 @@ public class CkgApplication {
             GraphIngestionService ingestionService,
             @Value("${analyzer.target.path}") String targetPath) {
         return args -> {
-            // Blocks startup until JGraphT is fully populated
             ingestionService.ingestProject(targetPath);
             System.out.println(">>> IN-MEMORY GRAPH POPULATED: " + targetPath);
         };

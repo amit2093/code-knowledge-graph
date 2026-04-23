@@ -12,7 +12,6 @@ public class CodeMethod {
         this.name = name;
     }
 
-    // Standard Getters and Setters
     public String getSignature() { return signature; }
     public void setSignature(String signature) { this.signature = signature; }
     public String getName() { return name; }
