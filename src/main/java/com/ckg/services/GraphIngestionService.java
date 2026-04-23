@@ -1,9 +1,9 @@
-package com.ckg.service;
+package com.ckg.services;
 
-import com.ckg.CodebaseContext;
-import com.ckg.CodebaseGraph;
-import com.ckg.model.CodeClass;
-import com.ckg.model.CodeMethod;
+import com.ckg.components.CodebaseContext;
+import com.ckg.components.CodebaseGraph;
+import com.ckg.models.CodeClass;
+import com.ckg.models.CodeMethod;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultEdge;
 import org.springframework.stereotype.Service;

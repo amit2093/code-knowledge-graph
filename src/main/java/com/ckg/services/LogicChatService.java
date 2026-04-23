@@ -1,7 +1,7 @@
-package com.ckg.service;
+package com.ckg.services;
 
-import com.ckg.CodebaseGraph;
-import com.ckg.model.CodeMethod;
+import com.ckg.components.CodebaseGraph;
+import com.ckg.models.CodeMethod;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import java.util.stream.Collectors;

@@ -1,7 +1,7 @@
-package com.ckg;
+package com.ckg.components;
 
-import com.ckg.model.CodeClass;
-import com.ckg.model.CodeMethod;
+import com.ckg.models.CodeClass;
+import com.ckg.models.CodeMethod;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DirectedPseudograph;

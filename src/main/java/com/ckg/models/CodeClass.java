@@ -1,4 +1,4 @@
-package com.ckg.model;
+package com.ckg.models;
 
 import java.util.Objects;
 

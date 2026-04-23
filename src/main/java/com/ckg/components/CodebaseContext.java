@@ -1,4 +1,4 @@
-package com.ckg;
+package com.ckg.components;
 
 import org.springframework.stereotype.Component;
 import spoon.reflect.CtModel;

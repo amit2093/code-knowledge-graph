@@ -1,9 +1,9 @@
-package com.ckg.controller;
+package com.ckg.controllers;
 
-import com.ckg.CodebaseGraph;
-import com.ckg.service.LogicChatService;
-import com.ckg.model.CodeClass;
-import com.ckg.model.CodeMethod;
+import com.ckg.components.CodebaseGraph;
+import com.ckg.services.LogicChatService;
+import com.ckg.models.CodeClass;
+import com.ckg.models.CodeMethod;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultEdge;
 import org.springframework.web.bind.annotation.GetMapping;
