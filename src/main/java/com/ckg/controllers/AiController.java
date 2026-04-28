@@ -4,8 +4,6 @@ import com.ckg.components.CodebaseGraph;
 import com.ckg.services.LogicChatService;
 import com.ckg.models.CodeClass;
 import com.ckg.models.CodeMethod;
-import org.jgrapht.Graph;
-import org.jgrapht.graph.DefaultEdge;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,10 +31,9 @@ public class AiController {
     @GetMapping("/api/graph")
     public List<Map<String, Object>> getGraphData() {
         List<Map<String, Object>> elements = new ArrayList<>();
-        Graph<Object, DefaultEdge> graph = codebaseGraph.getGraph();
 
         // Add Nodes
-        graph.vertexSet().forEach(v -> {
+        codebaseGraph.getVertices().forEach(v -> {
             Map<String, Object> data = new HashMap<>();
             if (v instanceof CodeClass c) {
                 data.put("id", c.getQualifiedName());
@@ -47,21 +44,19 @@ public class AiController {
                 data.put("id", m.getSignature());
                 data.put("label", m.getName());
                 data.put("type", "Method");
-
-                // Attach the raw source code
-                if (m.getContent() != null) {
-                    data.put("content", m.getContent());
-                }
+                if (m.getContent() != null) data.put("content", m.getContent());
             }
             elements.add(Map.of("data", data));
         });
 
-        // Add Edges
-        graph.edgeSet().forEach(e -> {
-            elements.add(Map.of("data", Map.of(
-                    "source", getId(graph.getEdgeSource(e)),
-                    "target", getId(graph.getEdgeTarget(e))
-            )));
+        // Add Edges via Adjacency List
+        codebaseGraph.getAdjacencyList().forEach((source, targets) -> {
+            targets.forEach(target -> {
+                elements.add(Map.of("data", Map.of(
+                        "source", getId(source),
+                        "target", getId(target)
+                )));
+            });
         });
 
         return elements;

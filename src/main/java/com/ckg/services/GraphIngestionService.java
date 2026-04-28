@@ -1,97 +1,191 @@
 package com.ckg.services;
 
-import com.ckg.components.CodebaseContext;
 import com.ckg.components.CodebaseGraph;
 import com.ckg.models.CodeClass;
 import com.ckg.models.CodeMethod;
-import org.jgrapht.Graph;
-import org.jgrapht.graph.DefaultEdge;
 import org.springframework.stereotype.Service;
-import spoon.Launcher;
-import spoon.reflect.code.CtInvocation;
-import spoon.reflect.declaration.CtClass;
-import spoon.reflect.declaration.CtMethod;
-import spoon.reflect.visitor.filter.TypeFilter;
 
-import java.util.List;
-import java.util.Map;
+import javax.tools.*;
+import com.sun.source.tree.*;
+import com.sun.source.util.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Stream;
 
 @Service
 public class GraphIngestionService {
     private final CodebaseGraph codebaseGraph;
-    private final CodebaseContext codebaseContext;
 
-    public GraphIngestionService(CodebaseGraph codebaseGraph, CodebaseContext codebaseContext) {
+    public GraphIngestionService(CodebaseGraph codebaseGraph) {
         this.codebaseGraph = codebaseGraph;
-        this.codebaseContext = codebaseContext;
     }
 
     public void ingestProject(String projectPath) {
         codebaseGraph.clear();
-        Graph<Object, DefaultEdge> graph = codebaseGraph.getGraph();
 
-        Launcher launcher = new Launcher();
-        launcher.addInputResource(projectPath);
-        launcher.getEnvironment().setNoClasspath(true);
-        launcher.buildModel();
-
-        // CRITICAL: Store the model for LogicChatService
-        codebaseContext.setModel(launcher.getModel());
-
-        Map<String, CodeMethod> registry = codebaseGraph.getRegistry();
-        Map<String, CodeClass> classRegistry = codebaseGraph.getClassRegistry();
-
-        // 1. Filtered Vertex Creation
-        List<CtClass> classes = launcher.getModel().getElements(new TypeFilter<>(CtClass.class));
-        for (CtClass<?> ctClass : classes) {
-            if (isExcluded(ctClass)) continue;
-
-            CodeClass classNode = new CodeClass(ctClass.getQualifiedName(), ctClass.getSimpleName());
-            classRegistry.put(classNode.getQualifiedName(), classNode);
-            graph.addVertex(classNode);
-
-            for (CtMethod<?> ctMethod : ctClass.getMethods()) {
-                // Skip getters/setters/etc.
-                if (isBoilerplate(ctMethod)) continue;
-
-                CodeMethod methodNode = new CodeMethod(ctMethod.getSignature(), ctMethod.getSimpleName());
-                methodNode.setContent(ctMethod.toString());
-                registry.put(methodNode.getSignature(), methodNode);
-
-                graph.addVertex(methodNode);
-                graph.addEdge(classNode, methodNode); // DECLARES
-            }
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) {
+            throw new IllegalStateException("JDK required. JRE is insufficient to run JavaCompiler.");
         }
 
-        // 2. Filtered Edge Creation
-        List<CtMethod> allMethods = launcher.getModel().getElements(new TypeFilter<>(CtMethod.class));
-        for (CtMethod<?> ctCaller : allMethods) {
-            CodeMethod callerNode = registry.get(ctCaller.getSignature());
-            if (callerNode == null) continue; // Already filtered out in Loop 1
+        StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);
+        List<File> javaFiles = new ArrayList<>();
 
-            List<CtInvocation> invocations = ctCaller.getElements(new TypeFilter<>(CtInvocation.class));
-            for (CtInvocation<?> invocation : invocations) {
-                String targetSig = invocation.getExecutable().getSignature();
-                CodeMethod calledNode = registry.get(targetSig);
+        try (Stream<Path> paths = Files.walk(Paths.get(projectPath))) {
+            paths.filter(Files::isRegularFile)
+                    .filter(p -> p.toString().endsWith(".java"))
+                    .forEach(p -> javaFiles.add(p.toFile()));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read project directory", e);
+        }
 
-                if (calledNode != null) {
-                    graph.addEdge(callerNode, calledNode);
-                }
+        Iterable<? extends JavaFileObject> compilationUnits = fileManager.getJavaFileObjectsFromFiles(javaFiles);
+        JavacTask task = (JavacTask) compiler.getTask(null, fileManager, null, null, null, compilationUnits);
+
+        try {
+            Iterable<? extends CompilationUnitTree> asts = task.parse();
+            Map<String, CodeMethod> methodRegistry = codebaseGraph.getRegistry();
+
+            // Pass 1: Build Nodes and Class-to-Method Edges
+            for (CompilationUnitTree ast : asts) {
+                new NodeExtractionVisitor(ast).scan(new TreePath(ast), null);
             }
+
+            // Pass 2: Build Method-to-Method Call Edges
+            for (CompilationUnitTree ast : asts) {
+                new EdgeExtractionVisitor(ast, methodRegistry).scan(new TreePath(ast), null);
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to parse AST", e);
         }
     }
 
-    private boolean isExcluded(CtClass<?> ctClass) {
-        String qName = ctClass.getQualifiedName().toLowerCase();
-        return qName.contains(".model.")
-            || qName.contains(".pojo.");
+    // --- VISITOR 1: Extract Classes, Methods, and Source Code ---
+    private class NodeExtractionVisitor extends TreePathScanner<Void, Void> {
+        private final CompilationUnitTree currentUnit;
+        private CodeClass currentClass;
+
+        public NodeExtractionVisitor(CompilationUnitTree currentUnit) {
+            this.currentUnit = currentUnit;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void aVoid) {
+            String packageName = currentUnit.getPackageName() != null ? currentUnit.getPackageName().toString() + "." : "";
+            String className = node.getSimpleName().toString();
+            if (className.isEmpty() || isExcluded(className)) return super.visitClass(node, aVoid);
+
+            // FIX 1: Protect state from being overwritten by nested inner classes
+            CodeClass previousClass = currentClass;
+            currentClass = new CodeClass(packageName + className, className);
+
+            codebaseGraph.getClassRegistry().put(currentClass.getQualifiedName(), currentClass);
+            codebaseGraph.addVertex(currentClass);
+
+            Void result = super.visitClass(node, aVoid);
+
+            // Restore scope after exiting the class
+            currentClass = previousClass;
+            return result;
+        }
+
+        @Override
+        public Void visitMethod(MethodTree node, Void aVoid) {
+            if (currentClass == null || isBoilerplate(node.getName().toString())) return super.visitMethod(node, aVoid);
+
+            String methodName = node.getName().toString();
+            String signature = currentClass.getQualifiedName() + "." + methodName;
+
+            CodeMethod methodNode = new CodeMethod(signature, methodName);
+            if (node.getBody() != null) {
+                methodNode.setContent(node.getBody().toString());
+            }
+
+            codebaseGraph.getRegistry().put(signature, methodNode);
+            codebaseGraph.addVertex(methodNode);
+            codebaseGraph.addEdge(currentClass, methodNode);
+
+            return super.visitMethod(node, aVoid);
+        }
     }
 
-    private boolean isBoilerplate(CtMethod<?> method) {
-        String name = method.getSimpleName();
-        return name.equals("toString") ||
-                name.equals("hashCode") ||
-                name.equals("get*") ||
-                name.equals("equals");
+    // --- VISITOR 2: Extract Method Invocations ---
+    private class EdgeExtractionVisitor extends TreePathScanner<Void, Void> {
+        private final CompilationUnitTree currentUnit;
+        private final Map<String, CodeMethod> methodRegistry;
+        private CodeClass currentClass;
+        private CodeMethod currentMethod;
+
+        public EdgeExtractionVisitor(CompilationUnitTree currentUnit, Map<String, CodeMethod> methodRegistry) {
+            this.currentUnit = currentUnit;
+            this.methodRegistry = methodRegistry;
+        }
+
+        @Override
+        public Void visitClass(ClassTree node, Void aVoid) {
+            String packageName = currentUnit.getPackageName() != null ? currentUnit.getPackageName().toString() + "." : "";
+            String className = node.getSimpleName().toString();
+            if (className.isEmpty() || isExcluded(className)) return super.visitClass(node, aVoid);
+
+            CodeClass previousClass = currentClass;
+            currentClass = codebaseGraph.getClassRegistry().get(packageName + className);
+
+            Void result = super.visitClass(node, aVoid);
+            currentClass = previousClass;
+            return result;
+        }
+
+        @Override
+        public Void visitMethod(MethodTree node, Void aVoid) {
+            if (currentClass == null) return super.visitMethod(node, aVoid);
+
+            // FIX 2: Exact signature lookup instead of naive first-match
+            String signature = currentClass.getQualifiedName() + "." + node.getName().toString();
+
+            CodeMethod previousMethod = currentMethod;
+            currentMethod = methodRegistry.get(signature);
+
+            Void result = super.visitMethod(node, aVoid);
+            currentMethod = previousMethod;
+            return result;
+        }
+
+        @Override
+        public Void visitMethodInvocation(MethodInvocationTree node, Void aVoid) {
+            if (currentMethod != null) {
+                String targetName = extractMethodName(node.getMethodSelect());
+
+                // FIX 3: Target resolution still relies on string matching (dependency tradeoff),
+                // but the SOURCE is now guaranteed accurate.
+                methodRegistry.values().stream()
+                        .filter(m -> m.getName().equals(targetName))
+                        .forEach(targetMethod -> codebaseGraph.addEdge(currentMethod, targetMethod));
+            }
+            return super.visitMethodInvocation(node, aVoid);
+        }
+
+        private String extractMethodName(ExpressionTree methodSelect) {
+            if (methodSelect instanceof IdentifierTree) {
+                return ((IdentifierTree) methodSelect).getName().toString();
+            } else if (methodSelect instanceof MemberSelectTree) {
+                return ((MemberSelectTree) methodSelect).getIdentifier().toString();
+            }
+            return "";
+        }
+    }
+
+    private boolean isExcluded(String name) {
+        String lower = name.toLowerCase();
+        return lower.contains("dto") || lower.contains("model");
+    }
+
+    private boolean isBoilerplate(String name) {
+        return name.equals("toString") || name.equals("hashCode") ||
+                name.startsWith("get") || name.startsWith("set") || name.equals("<init>");
     }
 }
