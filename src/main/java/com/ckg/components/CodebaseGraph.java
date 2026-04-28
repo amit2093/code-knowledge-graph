@@ -2,35 +2,23 @@ package com.ckg.components;
 
 import com.ckg.models.CodeClass;
 import com.ckg.models.CodeMethod;
+import org.jgrapht.Graph;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DirectedPseudograph;
 import org.springframework.stereotype.Component;
-
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class CodebaseGraph {
-    // Standard collections drastically reduce memory footprint
-    private final Map<Object, Set<Object>> adjacencyList = new HashMap<>();
-    private final Map<String, CodeMethod> methodRegistry = new HashMap<>();
-    private final Map<String, CodeClass> classRegistry = new HashMap<>();
-    public void addEdge(Object source, Object target) {
-        if (source == null || target == null) return; // Prevent ConcurrentHashMap NPE
-        addVertex(source);
-        addVertex(target);
-        adjacencyList.get(source).add(target);
-    }
+    // Vertex type is Object to support polymorphic nodes (Class + Method)
+    private Graph<Object, DefaultEdge> graph = new DirectedPseudograph<>(DefaultEdge.class);
 
-    public void addVertex(Object vertex) {
-        if (vertex == null) return;
-        adjacencyList.putIfAbsent(vertex, ConcurrentHashMap.newKeySet());
-    }
+    private final Map<String, CodeMethod> methodRegistry = new ConcurrentHashMap<>();
+    private final Map<String, CodeClass> classRegistry = new ConcurrentHashMap<>();
 
-    public Map<Object, Set<Object>> getAdjacencyList() { return adjacencyList; }
-    public Set<Object> getVertices() { return adjacencyList.keySet(); }
-    public Set<Object> getOutgoingDependencies(Object source) {
-        return adjacencyList.getOrDefault(source, Set.of());
+    public Graph<Object, DefaultEdge> getGraph() {
+        return graph;
     }
 
     public Map<String, CodeMethod> getRegistry() { return methodRegistry; }
@@ -39,6 +27,6 @@ public class CodebaseGraph {
     public void clear() {
         methodRegistry.clear();
         classRegistry.clear();
-        adjacencyList.clear();
+        this.graph = new DirectedPseudograph<>(DefaultEdge.class);
     }
 }
